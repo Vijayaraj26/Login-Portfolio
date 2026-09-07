@@ -1,6 +1,18 @@
 :80 {
-    # Reverse proxy for backend API endpoints
+    # Reverse proxy for backend API endpoints and Swagger documentation
     handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle /docs* {
+        reverse_proxy backend:8000
+    }
+
+    handle /openapi.json {
+        reverse_proxy backend:8000
+    }
+
+    handle /redoc* {
         reverse_proxy backend:8000
     }
 

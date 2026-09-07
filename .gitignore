@@ -29,3 +29,4 @@ dist-ssr/
 *.swo
 .DS_Store
 Thumbs.db
+login.pem
