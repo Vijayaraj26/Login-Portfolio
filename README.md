@@ -224,3 +224,5 @@ SELECT id, username, password_hash, created_at FROM users;
 
 ### 5. Database data disappeared after restarting
 * **Explanation:** If you ran `docker compose down -v`, the `-v` flag removed the persistent volume. For regular restarts, always use `docker compose down` without `-v`.
+#   L o g i n - P o r t f o l i o  
+ 
