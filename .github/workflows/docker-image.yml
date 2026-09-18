@@ -4,43 +4,61 @@ on:
   push:
     branches: ["main"]
 
+  pull_request:
+    branches: ["main"]
+
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Get the latest GitHub code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # CI
+      # 2. Build Backend Docker image
       - name: Build Backend Docker image
         run: |
           docker build ./backend \
             --file ./backend/Dockerfile \
             --tag my-backend-image:${{ github.sha }}
 
+      # 3. Build Frontend Docker image
       - name: Build Frontend Docker image
         run: |
           docker build ./frontend \
             --file ./frontend/Dockerfile \
             --tag my-frontend-image:${{ github.sha }}
 
+      # 4. Build Nginx Docker image
       - name: Build Nginx Docker image
         run: |
           docker build ./nginx \
             --file ./nginx/Dockerfile \
             --tag my-nginx-image:${{ github.sha }}
 
-      # CD
+      # 5. Deploy latest code to AWS EC2
       - name: Deploy to EC2
+        if: github.event_name == 'push'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/your-project
+            cd ~/Login-Portfolio
+
+            echo "Pulling latest code..."
             git pull origin main
+
+            echo "Stopping old containers..."
             docker compose down
+
+            echo "Building new containers..."
             docker compose build
+
+            echo "Starting new containers..."
             docker compose up -d
+
+            echo "Checking running containers..."
+            docker compose ps
