@@ -18,8 +18,7 @@ load_dotenv()
 # Secret configuration for JWT
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretjwtkey_dockerized_login_fullstack_secure_token_12345")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES") or "60")
 # Password hashing context using bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
