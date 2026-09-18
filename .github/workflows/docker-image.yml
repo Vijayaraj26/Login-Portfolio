@@ -1,80 +1,82 @@
-name: CI/CD Update
+name: Deploy Login Portfolio to EC2
 
 on:
   push:
-    branches: ["main"]
-
-  pull_request:
-    branches: ["main"]
+    branches:
+      - main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ==========================================
-      # 1. Checkout GitHub repository
-      # ==========================================
+      # 1. Get the latest code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ==========================================
-      # 2. Build Backend Docker image
-      # ==========================================
-      - name: Build Backend Docker image
-        run: |
-          docker build ./backend \
-            --file ./backend/Dockerfile \
-            --tag my-backend-image:${{ github.sha }}
-
-      # ==========================================
-      # 3. Build Frontend Docker image
-      # ==========================================
-      - name: Build Frontend Docker image
-        run: |
-          docker build ./frontend \
-            --file ./frontend/Dockerfile \
-            --tag my-frontend-image:${{ github.sha }}
-
-      # ==========================================
-      # 4. Build Nginx Docker image
-      # ==========================================
-      - name: Build Nginx Docker image
-        run: |
-          docker build ./nginx \
-            --file ./nginx/Dockerfile \
-            --tag my-nginx-image:${{ github.sha }}
-
-      # ==========================================
-      # 5. Deploy to AWS EC2
-      # ==========================================
+      # 2. Connect to EC2 and deploy
       - name: Deploy to EC2
-        if: github.event_name == 'push'
         uses: appleboy/ssh-action@v1.2.0
         with:
-            host: ${{ secrets.EC2_HOST }}
-            username: ubuntu
-            key: ${{ secrets.EC2_SSH_KEY }}
-            script: |
-              set -e
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
 
-              if [ ! -d "$HOME/Login-Portfolio/.git" ]; then
-                echo "First deployment - cloning repository..."
-                git clone https://github.com/Vijayaraj26/Login-Portfolio.git "$HOME/Login-Portfolio"
-              else
-                echo "Existing deployment - getting latest code..."
-                cd "$HOME/Login-Portfolio"
-                git fetch origin main
-                git reset --hard origin/main
-              fi
+          script: |
+            set -e
 
-              cd "$HOME/Login-Portfolio"
+            echo "======================================"
+            echo "Starting deployment"
+            echo "======================================"
 
-              echo "Building Docker containers..."
-              docker compose build
+            # Go to project directory
+            cd ~/Login-Portfolio
 
-              echo "Starting Docker containers..."
-              docker compose up -d
+            # Get latest GitHub code
+            git fetch origin main
+            git reset --hard origin/main
 
-              echo "Checking containers..."
-              docker compose ps
+            echo "Code updated"
+
+            # Create .env automatically
+            cat > .env <<EOF
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            DATABASE_URL=postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/${{ secrets.POSTGRES_DB }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            ALGORITHM=${{ secrets.ALGORITHM }}
+            ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+            EOF
+
+            echo ".env created"
+
+            # Stop old containers
+            docker compose down
+
+            # Build and start new containers
+            docker compose up -d --build
+
+            echo "Waiting for containers..."
+            sleep 15
+
+            # Show container status
+            docker compose ps
+
+            # Show PostgreSQL status
+            echo "PostgreSQL health:"
+            docker inspect login_postgres \
+              --format='{{.State.Health.Status}}' || true
+
+            # Show logs if PostgreSQL is unhealthy
+            if [ "$(docker inspect login_postgres --format='{{.State.Health.Status}}' 2>/dev/null || echo unknown)" = "unhealthy" ]; then
+              echo "PostgreSQL is unhealthy"
+              docker compose logs postgres --tail 100
+              exit 1
+            fi
+
+            echo "======================================"
+            echo "Deployment completed"
+            echo "======================================"
+```
