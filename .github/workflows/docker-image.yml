@@ -1,23 +1,46 @@
-name: Docker Image CI
+name: CI/CD - Deploy to EC2
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build Backend Docker image
-      run: docker build ./backend --file ./backend/Dockerfile --tag my-backend-image:$(date +%s)
-    
-    - name: Build Frontend Docker image
-      run: docker build ./frontend --file ./frontend/Dockerfile --tag my-frontend-image:$(date +%s)
-    
-    - name: Build Nginx Docker image
-      run: docker build ./nginx --file ./nginx/Dockerfile --tag my-nginx-image:$(date +%s)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # CI
+      - name: Build Backend Docker image
+        run: |
+          docker build ./backend \
+            --file ./backend/Dockerfile \
+            --tag my-backend-image:${{ github.sha }}
+
+      - name: Build Frontend Docker image
+        run: |
+          docker build ./frontend \
+            --file ./frontend/Dockerfile \
+            --tag my-frontend-image:${{ github.sha }}
+
+      - name: Build Nginx Docker image
+        run: |
+          docker build ./nginx \
+            --file ./nginx/Dockerfile \
+            --tag my-nginx-image:${{ github.sha }}
+
+      # CD
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/your-project
+            git pull origin main
+            docker compose down
+            docker compose build
+            docker compose up -d
