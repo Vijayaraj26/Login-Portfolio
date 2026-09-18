@@ -1,4 +1,4 @@
-name: CI/CD - Deploy to EC2
+name: CI/CD - Docker Build and EC2 Deploy
 
 on:
   push:
@@ -12,32 +12,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Get the latest GitHub code
+      # ==========================================
+      # 1. Checkout GitHub repository
+      # ==========================================
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ==========================================
       # 2. Build Backend Docker image
+      # ==========================================
       - name: Build Backend Docker image
         run: |
           docker build ./backend \
             --file ./backend/Dockerfile \
             --tag my-backend-image:${{ github.sha }}
 
+      # ==========================================
       # 3. Build Frontend Docker image
+      # ==========================================
       - name: Build Frontend Docker image
         run: |
           docker build ./frontend \
             --file ./frontend/Dockerfile \
             --tag my-frontend-image:${{ github.sha }}
 
+      # ==========================================
       # 4. Build Nginx Docker image
+      # ==========================================
       - name: Build Nginx Docker image
         run: |
           docker build ./nginx \
             --file ./nginx/Dockerfile \
             --tag my-nginx-image:${{ github.sha }}
 
-      # 5. Deploy latest code to AWS EC2
+      # ==========================================
+      # 5. Deploy to AWS EC2
+      # ==========================================
       - name: Deploy to EC2
         if: github.event_name == 'push'
         uses: appleboy/ssh-action@v1.2.0
@@ -45,20 +55,91 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+
           script: |
-            cd ~/Login-Portfolio
+            set -e
 
-            echo "Pulling latest code..."
-            git pull origin main
+            echo "======================================"
+            echo "Starting EC2 deployment"
+            echo "======================================"
 
+            # --------------------------------------
+            # Check Git
+            # --------------------------------------
+            echo "Checking Git..."
+            git --version
+
+            # --------------------------------------
+            # Check Docker
+            # --------------------------------------
+            echo "Checking Docker..."
+            docker --version
+            docker compose version
+
+            # --------------------------------------
+            # Clone on first deployment
+            # Pull on later deployments
+            # --------------------------------------
+            if [ ! -d "$HOME/Login-Portfolio/.git" ]; then
+
+              echo "Repository does not exist."
+              echo "Cloning Login-Portfolio..."
+
+              git clone \
+                https://github.com/Vijayaraj26/Login-Portfolio.git \
+                "$HOME/Login-Portfolio"
+
+            else
+
+              echo "Repository already exists."
+              echo "Getting latest code..."
+
+              cd "$HOME/Login-Portfolio"
+
+              git fetch origin main
+              git reset --hard origin/main
+
+            fi
+
+            # --------------------------------------
+            # Go to project directory
+            # --------------------------------------
+            cd "$HOME/Login-Portfolio"
+
+            echo "Current project:"
+            pwd
+
+            echo "Current commit:"
+            git log -1 --oneline
+
+            # --------------------------------------
+            # Stop old containers
+            # --------------------------------------
             echo "Stopping old containers..."
+
             docker compose down
 
-            echo "Building new containers..."
-            docker compose build
+            # --------------------------------------
+            # Build latest Docker containers
+            # --------------------------------------
+            echo "Building latest Docker containers..."
 
-            echo "Starting new containers..."
+            docker compose build --no-cache
+
+            # --------------------------------------
+            # Start new containers
+            # --------------------------------------
+            echo "Starting Docker containers..."
+
             docker compose up -d
 
+            # --------------------------------------
+            # Show running containers
+            # --------------------------------------
             echo "Checking running containers..."
+
             docker compose ps
+
+            echo "======================================"
+            echo "Deployment completed successfully!"
+            echo "======================================"
